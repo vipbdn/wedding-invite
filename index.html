@@ -643,9 +643,9 @@ const musicBtn=document.getElementById('music');
 /* Music flow:
    - Opening (mantra slide): instrumental only: a shankh blow, then bell, tanpura and bansuri.
    - Once the guest moves on to the invitation, it fades out and the song (with vocals) fades in.
-   Song file: music/mangal-rang.mp3. If it is missing, the instrumental keeps playing throughout. */
-const SONG_START = 36.5; // "tere hone se hi mera hona hai" (~37s); seconds into the MP3 where the song begins (and where it loops back to)
-const song=new Audio('music/mangal-rang.mp3');
+   Song file: music/kudmayi.mp3. If it is missing, the instrumental keeps playing throughout. */
+const SONG_START = 15.5; // Kudmayi, vocals from ~16s; seconds into the MP3 where the song begins (and where it loops back to)
+const song=new Audio('music/kudmayi.mp3');
 song.preload='auto';
 song.addEventListener('loadedmetadata',()=>{ if(song.currentTime<SONG_START) song.currentTime=SONG_START; });
 song.addEventListener('ended',()=>{ song.currentTime=SONG_START; song.play().catch(()=>{}); });
