@@ -644,8 +644,11 @@ const musicBtn=document.getElementById('music');
    - Opening (mantra slide): instrumental only: a shankh blow, then bell, tanpura and bansuri.
    - Once the guest moves on to the invitation, it fades out and the song (with vocals) fades in.
    Song file: music/mangal-rang.mp3. If it is missing, the instrumental keeps playing throughout. */
+const SONG_START = 36.5; // "tere hone se hi mera hona hai" (~37s); seconds into the MP3 where the song begins (and where it loops back to)
 const song=new Audio('music/mangal-rang.mp3');
-song.loop=true; song.preload='auto';
+song.preload='auto';
+song.addEventListener('loadedmetadata',()=>{ if(song.currentTime<SONG_START) song.currentTime=SONG_START; });
+song.addEventListener('ended',()=>{ song.currentTime=SONG_START; song.play().catch(()=>{}); });
 let songOK=true, opening=true, mode=null, fadeTimer=null;   // mode: 'synth' | 'song' | null
 song.addEventListener('error',()=>{ songOK=false; if(mode==='song'){ mode=null; playing=false; startSynth(); } });
 
@@ -658,7 +661,8 @@ function startMusic(){ (opening || !songOK) ? startSynth() : startSong(); }
 function startSong(){
   mode='song'; playing=true; musicBtn.classList.add('playing');
   song.volume=0;
-  song.play().then(()=>fadeSong(.8)).catch(()=>{
+  if(song.currentTime<SONG_START) song.currentTime=SONG_START;
+  song.play().then(()=>fadeSong(.8,1500)).catch(()=>{
     if(mode!=='song') return;
     if(!songOK){ mode=null; playing=false; startSynth(); }
     else { mode=null; playing=false; musicBtn.classList.remove('playing'); }
@@ -697,7 +701,7 @@ function endOpening(){
 /* Unlock the song element during the first tap so it can start later on mobile browsers. */
 function primeSong(){
   song.muted=true;
-  song.play().then(()=>{ if(mode!=='song'){ song.pause(); song.currentTime=0; } song.muted=false; })
+  song.play().then(()=>{ if(mode!=='song'){ song.pause(); song.currentTime=SONG_START; } song.muted=false; })
              .catch(()=>{ song.muted=false; });
 }
 musicBtn.onclick=()=> playing ? stopMusic() : startMusic();
