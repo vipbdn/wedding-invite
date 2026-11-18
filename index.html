@@ -286,7 +286,7 @@ footer p{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:17px
     <div class="gallery reveal">
       <div class="ph" style="background:linear-gradient(160deg,#c98b6b,#8a3b3b)"><img src="images/1.jpg" alt="Deepak and Mansi on stage" loading="lazy"></div>
       <div class="ph" style="background:linear-gradient(160deg,#d9b77e,#a06a3a)"><img src="images/2.jpg" alt="Deepak and Mansi at the ring ceremony" loading="lazy"></div>
-      <div class="ph" style="background:linear-gradient(160deg,#9fae8a,#5f6f4f)"><img src="images/3.jpg" alt="Deepak and Mansi together" loading="lazy"></div>
+      <div class="ph" style="background:linear-gradient(160deg,#9fae8a,#5f6f4f)"><img src="images/3.jpg" alt="Deepak and Mansi holding hands at the ring ceremony" loading="lazy"></div>
       <div class="ph" style="background:linear-gradient(160deg,#b67c8e,#6e1423)"><img src="images/4.jpg" alt="Mansi in her gown with Deepak" loading="lazy"></div>
     </div>
   </section>
@@ -319,7 +319,7 @@ footer p{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:17px
       <a class="btn solid" href="https://www.google.com/maps/search/?api=1&query=Gyan+Banquet+Hall+Ujhani+Budaun" target="_blank" rel="noopener">Get Directions</a>
     </div>
     <svg class="divider reveal" style="margin-top:30px" viewBox="0 0 140 20"><path d="M0 10h55M85 10h55" stroke="#b8893b" stroke-width="1"/><path d="M70 2l6 8-6 8-6-8z" fill="none" stroke="#b8893b"/></svg>
-    <div class="eyebrow reveal">Haldi &amp; Mehndi · 10th &amp; 11th December</div>
+    <div class="eyebrow reveal">Haldi &amp; Mehndi · 11th December</div>
     <p class="addr reveal" style="margin-top:6px"><b style="color:var(--maroon)">At our Residence</b><br>Ujhani</p>
   </section>
 
@@ -354,7 +354,7 @@ footer p{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:17px
     <div class="tag">#DeepakWedsMansi</div>
     <div class="btn-row">
       <a class="btn" style="border-color:var(--gold-l);color:var(--gold-l)" target="_blank" rel="noopener"
-         href="https://wa.me/?text=You're%20invited%20to%20the%20wedding%20of%20Deepak%20%26%20Mansi!%20Wedding%2012%20Dec%202026%20(Haldi%2010%20Dec%2C%20Mehndi%2011%20Dec)%20%E2%80%94%20Ujhani%20(Budaun)">Share on WhatsApp</a>
+         href="https://wa.me/?text=You're%20invited%20to%20the%20wedding%20of%20Deepak%20%26%20Mansi!%20Wedding%2012%20Dec%202026%20(Haldi%20%26%20Mehndi%2011%20Dec)%20%E2%80%94%20Ujhani%20(Budaun)">Share on WhatsApp</a>
     </div>
   </footer>
 </main>
@@ -374,10 +374,10 @@ footer p{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:17px
 /* ---------- Data (edit these to customise) ---------- */
 const WEDDING_DATE = new Date('2026-12-12T00:00:00+05:30'); // countdown to the wedding day
 const EVENTS = [
-  {id:'haldi', name:'Haldi', icon:'🌼', tag:'Turmeric, laughter & splashes of yellow', date:'10th December 2026', time:'11:00 AM',
-   venue:'At our Residence, Ujhani', start:'20261210T053000Z', end:'20261210T083000Z'},
-  {id:'mehndi', name:'Mehndi', icon:'🌿', tag:'Henna, music & joyful songs', date:'11th December 2026', time:'11:00 AM',
+  {id:'haldi', name:'Haldi', icon:'🌼', tag:'Turmeric, laughter & splashes of yellow', date:'11th December 2026', time:'11:00 AM',
    venue:'At our Residence, Ujhani', start:'20261211T053000Z', end:'20261211T083000Z'},
+  {id:'mehndi', name:'Mehndi', icon:'🌿', tag:'Henna, music & joyful songs', date:'11th December 2026', time:'3:00 PM',
+   venue:'At our Residence, Ujhani', start:'20261211T093000Z', end:'20261211T123000Z'},
   {id:'wedding', name:'The Wedding', icon:'🔥', tag:'Seven vows, a lifetime together', date:'12th December 2026', time:'',
    venue:'Gyan Banquet Hall, In Front of Block, Ujhani (Budaun)', start:'20261212', end:'20261213'},
 ];
@@ -603,7 +603,21 @@ function scheduleCycle(t0){
 }
 
 const musicBtn=document.getElementById('music');
+/* Song: put the MP3 at music/mangal-rang.mp3. If it is missing, the synthesized flute plays instead. */
+const song=new Audio('music/mangal-rang.mp3');
+song.loop=true; song.preload='auto';
+let songOK=true, usingSong=false;
+song.addEventListener('error',()=>{ songOK=false; if(usingSong && playing){ usingSong=false; playing=false; startSynth(); } });
 function startMusic(){
+  if(songOK){
+    usingSong=true; playing=true; musicBtn.classList.add('playing');
+    song.volume=.8;
+    song.play().catch(()=>{ if(!songOK){ usingSong=false; playing=false; startSynth(); } else { playing=false; musicBtn.classList.remove('playing'); } });
+    return;
+  }
+  startSynth();
+}
+function startSynth(){
   try{
     ctx=new (window.AudioContext||window.webkitAudioContext)();
     master=ctx.createGain(); master.gain.value=.8; master.connect(ctx.destination);
@@ -613,6 +627,7 @@ function startMusic(){
   }catch(e){}
 }
 function stopMusic(){
+  if(usingSong){ song.pause(); usingSong=false; playing=false; musicBtn.classList.remove('playing'); return; }
   playing=false; clearTimeout(loopTimer); uiTimers.forEach(clearTimeout); uiTimers=[]; highlight(-1);
   musicBtn.classList.remove('playing');
   try{ const c=ctx; master.gain.setTargetAtTime(0,c.currentTime,.15); setTimeout(()=>c.close(),600); }catch(e){}
