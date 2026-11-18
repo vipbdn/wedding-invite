@@ -389,6 +389,7 @@ function openInvite(){
   env.classList.add('open'); intro.classList.add('gone');
   setTimeout(()=>{ go(0); pager.classList.add('show'); document.getElementById('fab').classList.add('show'); }, 1500);
   burstPetals(40); setInterval(()=>burstPetals(3), 1800);
+  primeSong();
   startMusic();
 }
 env.addEventListener('click', openInvite);
@@ -485,6 +486,7 @@ function go(i){
   const s=slides[i]; s.scrollTop=0;
   s.querySelectorAll('.reveal').forEach((r,n)=>{ r.style.transitionDelay=(0.25+n*0.14)+'s'; requestAnimationFrame(()=>r.classList.add('in')); });
   cur=i;
+  if(i>0) endOpening();
   [...dots.children].forEach((d,k)=>d.classList.toggle('on',k===i));
   prevBtn.disabled = i===0;
   nextBtn.disabled = i===slides.length-1;
@@ -584,6 +586,41 @@ function flutePhrase(ph,t0){
   o.stop(t0+total+.6); vib.stop(t0+total+.6);
 }
 
+/* Shankh (conch): a breathy, brassy tone that swells slowly and lifts in pitch at the end of the blow */
+function shankh(t0, dur=4.5, vol=.09){
+  const base=f(-5);                       // Pa below Sa (~294 Hz), sits in tune with the drone
+  const mix=ctx.createGain(), f1=ctx.createBiquadFilter(), f2=ctx.createBiquadFilter(), lp=ctx.createBiquadFilter(), g=ctx.createGain();
+  f1.type='peaking'; f1.frequency.value=900;  f1.Q.value=2; f1.gain.value=8;   // shell resonances
+  f2.type='peaking'; f2.frequency.value=1750; f2.Q.value=3; f2.gain.value=5;
+  lp.type='lowpass'; lp.Q.value=.7;
+  lp.frequency.setValueAtTime(450,t0); lp.frequency.linearRampToValueAtTime(2600,t0+dur*.6); lp.frequency.linearRampToValueAtTime(3400,t0+dur);
+  const vib=ctx.createOscillator(), vibG=ctx.createGain();
+  vib.frequency.value=4.3; vibG.gain.setValueAtTime(0,t0); vibG.gain.linearRampToValueAtTime(base*.004,t0+dur*.75);
+  vib.connect(vibG);
+  [['sawtooth',1,0,.5],['sawtooth',1,7,.35],['square',2,-5,.1]].forEach(([type,m,det,amp])=>{
+    const o=ctx.createOscillator(), og=ctx.createGain(), fr=base*m;
+    o.type=type; o.detune.value=det;
+    o.frequency.setValueAtTime(fr*.97,t0); o.frequency.linearRampToValueAtTime(fr,t0+.35);   // blow settles into pitch
+    o.frequency.setValueAtTime(fr,t0+dur*.8); o.frequency.linearRampToValueAtTime(fr*1.035,t0+dur); // rise at the end
+    vibG.connect(o.frequency);
+    og.gain.value=amp; o.connect(og).connect(mix); o.start(t0); o.stop(t0+dur+.3);
+  });
+  g.gain.setValueAtTime(0,t0);
+  g.gain.linearRampToValueAtTime(vol*.45,t0+.6);
+  g.gain.linearRampToValueAtTime(vol,t0+dur*.75);
+  g.gain.setValueAtTime(vol,t0+dur-.2);
+  g.gain.linearRampToValueAtTime(0,t0+dur+.05);
+  mix.connect(f1).connect(f2).connect(lp).connect(g); out(g,.75);
+  // breath through the shell
+  const nb=ctx.createBuffer(1,Math.ceil(ctx.sampleRate*(dur+.2)),ctx.sampleRate), nd=nb.getChannelData(0);
+  for(let i=0;i<nd.length;i++) nd[i]=Math.random()*2-1;
+  const n=ctx.createBufferSource(), bp=ctx.createBiquadFilter(), ng=ctx.createGain();
+  n.buffer=nb; bp.type='bandpass'; bp.frequency.value=1300; bp.Q.value=.8;
+  ng.gain.setValueAtTime(0,t0); ng.gain.linearRampToValueAtTime(vol*.12,t0+.15); ng.gain.setTargetAtTime(vol*.06,t0+.5,.3); ng.gain.linearRampToValueAtTime(0,t0+dur+.05);
+  n.connect(bp).connect(ng); out(ng,.5);
+  vib.start(t0); n.start(t0); vib.stop(t0+dur+.3); n.stop(t0+dur+.3);
+}
+
 const slLines=()=>document.querySelectorAll('.sl');
 function highlight(i){ slLines().forEach((el,k)=>el.classList.toggle('sing',k===i)); }
 
@@ -603,35 +640,65 @@ function scheduleCycle(t0){
 }
 
 const musicBtn=document.getElementById('music');
-/* Song: put the MP3 at music/mangal-rang.mp3. If it is missing, the synthesized flute plays instead. */
+/* Music flow:
+   - Opening (mantra slide): instrumental only: a shankh blow, then bell, tanpura and bansuri.
+   - Once the guest moves on to the invitation, it fades out and the song (with vocals) fades in.
+   Song file: music/mangal-rang.mp3. If it is missing, the instrumental keeps playing throughout. */
 const song=new Audio('music/mangal-rang.mp3');
 song.loop=true; song.preload='auto';
-let songOK=true, usingSong=false;
-song.addEventListener('error',()=>{ songOK=false; if(usingSong && playing){ usingSong=false; playing=false; startSynth(); } });
-function startMusic(){
-  if(songOK){
-    usingSong=true; playing=true; musicBtn.classList.add('playing');
-    song.volume=.8;
-    song.play().catch(()=>{ if(!songOK){ usingSong=false; playing=false; startSynth(); } else { playing=false; musicBtn.classList.remove('playing'); } });
-    return;
-  }
-  startSynth();
+let songOK=true, opening=true, mode=null, fadeTimer=null;   // mode: 'synth' | 'song' | null
+song.addEventListener('error',()=>{ songOK=false; if(mode==='song'){ mode=null; playing=false; startSynth(); } });
+
+function fadeSong(target, ms=2000){
+  clearInterval(fadeTimer);
+  const from=song.volume, steps=20; let k=0;
+  fadeTimer=setInterval(()=>{ k++; song.volume=Math.min(1,Math.max(0,from+(target-from)*k/steps)); if(k>=steps) clearInterval(fadeTimer); }, ms/steps);
+}
+function startMusic(){ (opening || !songOK) ? startSynth() : startSong(); }
+function startSong(){
+  mode='song'; playing=true; musicBtn.classList.add('playing');
+  song.volume=0;
+  song.play().then(()=>fadeSong(.8)).catch(()=>{
+    if(mode!=='song') return;
+    if(!songOK){ mode=null; playing=false; startSynth(); }
+    else { mode=null; playing=false; musicBtn.classList.remove('playing'); }
+  });
 }
 function startSynth(){
   try{
     ctx=new (window.AudioContext||window.webkitAudioContext)();
     master=ctx.createGain(); master.gain.value=.8; master.connect(ctx.destination);
     verb=makeReverb(); verb.connect(master);
-    ctx.resume(); playing=true; musicBtn.classList.add('playing');
-    scheduleCycle(ctx.currentTime+.1);
+    ctx.resume(); mode='synth'; playing=true; musicBtn.classList.add('playing');
+    const t=ctx.currentTime+.1;
+    shankh(t);
+    scheduleCycle(t+4.9);
   }catch(e){}
 }
-function stopMusic(){
-  if(usingSong){ song.pause(); usingSong=false; playing=false; musicBtn.classList.remove('playing'); return; }
+function stopSynth(fade=.15){
   playing=false; clearTimeout(loopTimer); uiTimers.forEach(clearTimeout); uiTimers=[]; highlight(-1);
   musicBtn.classList.remove('playing');
-  try{ const c=ctx; master.gain.setTargetAtTime(0,c.currentTime,.15); setTimeout(()=>c.close(),600); }catch(e){}
+  try{ const c=ctx; master.gain.setTargetAtTime(0,c.currentTime,fade); setTimeout(()=>c.close(),fade*4000+100); }catch(e){}
   ctx=null;
+}
+function stopMusic(){
+  if(mode==='song'){ clearInterval(fadeTimer); song.pause(); }
+  else if(mode==='synth') stopSynth();
+  mode=null; playing=false; musicBtn.classList.remove('playing');
+}
+/* Called when the guest leaves the mantra slide: hand over from the instrumental to the song. */
+function endOpening(){
+  if(!opening) return;
+  opening=false;
+  if(mode!=='synth' || !songOK) return;   // music is off, or there is no song to switch to
+  stopSynth(.6);
+  startSong();
+}
+/* Unlock the song element during the first tap so it can start later on mobile browsers. */
+function primeSong(){
+  song.muted=true;
+  song.play().then(()=>{ if(mode!=='song'){ song.pause(); song.currentTime=0; } song.muted=false; })
+             .catch(()=>{ song.muted=false; });
 }
 musicBtn.onclick=()=> playing ? stopMusic() : startMusic();
 
